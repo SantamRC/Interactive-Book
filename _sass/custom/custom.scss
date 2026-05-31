@@ -321,3 +321,12 @@ button,
 .nav-list-expander {
   cursor: pointer;
 }
+
+// hover effect on sidebar nav items
+.nav-list-link {
+  transition: color 0.2s ease;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
