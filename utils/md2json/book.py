@@ -11,6 +11,7 @@ from .model import Chapter, Page, Section
 
 
 def build_page(path: Path, *, keep_title: bool = False, bibliography=None) -> Page:
+    """Parse one markdown file into a Page of view documents."""
     front, body = parse_front_matter(path.read_text(encoding="utf-8"))
     parser = Parser(body, keep_title=keep_title, bibliography=bibliography)
     views, _toc, warnings = parser.parse()
@@ -32,6 +33,7 @@ def chapter_contents(chapter: Chapter) -> list[dict]:
 
 
 def discover_chapters(docs: Path) -> list[Chapter]:
+    """Find every chapter in `docs`, ordering chapters and sections by nav_order."""
     chapters: list[Chapter] = []
     for index_path in sorted(docs.glob("*/index.md")):
         front, _ = parse_front_matter(index_path.read_text(encoding="utf-8"))
@@ -65,6 +67,7 @@ def discover_chapters(docs: Path) -> list[Chapter]:
 
 
 def build_navbar(chapters: list[Chapter]) -> dict:
+    """Build the navigation document listing chapters and their sections."""
     return {
         "chapters": [
             {

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import shutil
+import tempfile
 from pathlib import Path
 
 from .bibliography import load_bibliography
@@ -17,15 +19,18 @@ from .config import (
 from .output import write_document
 
 
-def main() -> int:
-    if not DOCS_PATH.is_dir():
-        print(f"docs directory not found: {DOCS_PATH}")
-        return 1
-
+def generate(staging: Path) -> tuple[int, list[tuple[Path, str]]]:
+    """Write every document into `staging`, returning the count and warnings."""
     bibliography = load_bibliography()
     chapters = discover_chapters(DOCS_PATH)
     written = 0
     warnings: list[tuple[Path, str]] = []
+
+    def emit(relative: str, document: dict) -> None:
+        """Write one document at `relative` inside the staging directory."""
+        nonlocal written
+        write_document(staging / relative, document, staging)
+        written += 1
 
     # Standalone pages that live at the root of the output directory.
     for source, target in ROOT_PAGES.items():
@@ -35,41 +40,64 @@ def main() -> int:
             continue
         page = build_page(path, keep_title=True, bibliography=bibliography)
         warnings += [(path, w) for w in page.warnings]
-        write_document(OUTPUT_PATH / target, {"name": page.name, "views": page.views})
-        written += 1
+        emit(target, {"name": page.name, "views": page.views})
 
-    write_document(OUTPUT_PATH / "navbar.json", build_navbar(chapters))
-    written += 1
+    emit("navbar.json", build_navbar(chapters))
 
     for chapter in chapters:
-        index = build_page(chapter.index_path, keep_title=True, bibliography=bibliography)
+        index = build_page(
+            chapter.index_path, keep_title=True, bibliography=bibliography
+        )
         warnings += [(chapter.index_path, w) for w in index.warnings]
         for view in index.views:
             if view.get("sub_type") == WIDGET_CHAPTER_CONTENTS:
                 view["items"] = chapter_contents(chapter)
-        write_document(
-            OUTPUT_PATH / chapter.directory / "0.json",
-            {"name": index.name, "views": index.views},
-        )
-        written += 1
+        emit(f"{chapter.directory}/0.json", {"name": index.name, "views": index.views})
 
         for number, section in enumerate(chapter.sections, start=1):
             page = build_page(section.path, bibliography=bibliography)
             warnings += [(section.path, w) for w in page.warnings]
-            write_document(
-                OUTPUT_PATH / chapter.directory / f"{number}.json",
+            emit(
+                f"{chapter.directory}/{number}.json",
                 {"name": page.name, "views": page.views},
             )
-            written += 1
 
-    if warnings:
-        print("\nwarnings:")
-        for path, warning in warnings:
-            try:
-                shown = path.relative_to(REPO_ROOT)
-            except ValueError:
-                shown = path
-            print(f"  {shown}: {warning}")
+    return written, warnings
 
+
+def report(warnings: list[tuple[Path, str]]) -> None:
+    """Print the parser warnings collected during a run."""
+    if not warnings:
+        return
+    print("\nwarnings:")
+    for path, warning in warnings:
+        try:
+            shown = path.relative_to(REPO_ROOT)
+        except ValueError:
+            shown = path
+        print(f"  {shown}: {warning}")
+
+
+def main() -> int:
+    """Regenerate the output tree from docs/, replacing it only on success."""
+    if not DOCS_PATH.is_dir():
+        print(f"docs directory not found: {DOCS_PATH}")
+        return 1
+
+    # The output tree is generator-owned: build it beside the real one and swap,
+    # so a removed or renumbered section cannot leave stale JSON behind and a
+    # failure part-way through cannot leave a half-written tree.
+    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(dir=OUTPUT_PATH.parent, prefix=".md2json-"))
+    try:
+        written, warnings = generate(staging)
+        if OUTPUT_PATH.exists():
+            shutil.rmtree(OUTPUT_PATH)
+        staging.replace(OUTPUT_PATH)
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+
+    report(warnings)
     print(f"\n{written} files written to {OUTPUT_PATH.relative_to(REPO_ROOT)}/")
     return 0

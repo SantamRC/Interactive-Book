@@ -36,6 +36,7 @@ def _read_braced(text: str, start: int) -> tuple[str, int]:
 
 
 def _clean(value: str) -> str:
+    """Strip LaTeX escapes, grouping braces and stray whitespace from a value."""
     for escape, plain in LATEX_ESCAPES.items():
         value = value.replace(escape, plain)
     value = value.replace("{", "").replace("}", "")
@@ -43,6 +44,7 @@ def _clean(value: str) -> str:
 
 
 def _read_value(text: str, i: int) -> tuple[str, int]:
+    """Read one field value, braced, quoted or bare, from position `i`."""
     while i < len(text) and text[i].isspace():
         i += 1
     if i < len(text) and text[i] == "{":
@@ -94,7 +96,7 @@ def load_bibliography() -> dict[str, dict[str, str]]:
 
 
 def _format_author(author: str) -> str:
-    """"Donzellini, G. and Oneto, L." -> "G. Donzellini, L. Oneto"."""
+    """Reorder BibTeX names: "Donzellini, G. and Oneto, L." -> "G. Donzellini, L. Oneto"."""
     names = [n.strip() for n in re.split(r"\s+and\s+", author) if n.strip()]
     formatted = []
     for name in names:
@@ -162,6 +164,7 @@ class CitationRegistry:
     """Numbers the citations on one page, in order of first appearance."""
 
     def __init__(self, entries: dict[str, dict[str, str]]):
+        """Start an empty registry backed by the merged BibTeX entries."""
         self.entries = entries
         self.order: list[str] = []
         self.missing: list[str] = []
@@ -178,9 +181,14 @@ class CitationRegistry:
         return ", ".join(f"[{n}]" for n in numbers)
 
     def rendered(self) -> list[str]:
-        """The reference list, in citation order."""
+        """The reference list, in citation order.
+
+        Every marked key gets an entry, including keys with no BibTeX record, so
+        that an inline "[2]" always points at the second item in this list.
+        """
         return [
             format_entry(self.entries[key])
-            for key in self.order
             if key in self.entries
+            else f"{key} (no entry found in _bibliography)"
+            for key in self.order
         ]

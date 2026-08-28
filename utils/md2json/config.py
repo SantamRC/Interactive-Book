@@ -13,7 +13,7 @@ def _find_repo_root(start: Path) -> Path:
     for candidate in (start, *start.parents):
         if (candidate / "_config.yml").is_file():
             return candidate
-    return start.parents[2]  # utils/md2json/config.py -> repo root
+    return start.parents[1]  # start is utils/md2json, so parents[1] is the repo
 
 
 REPO_ROOT = _find_repo_root(Path(__file__).resolve().parent)

@@ -44,6 +44,7 @@ IFRAME_SRC_RE = re.compile(r"<iframe[^>]*\ssrc=[\"']([^\"']+)[\"']", re.I)
 
 class Parser:
     def __init__(self, body: str, *, keep_title: bool = False, bibliography=None):
+        """Prepare to scan one page body, minus its front matter."""
         self.lines = body.split("\n")
         self.i = 0
         self.keep_title = keep_title
@@ -65,10 +66,12 @@ class Parser:
         return inline_text(raw, self.citations)
 
     def peek(self, offset: int = 0) -> str | None:
+        """The line `offset` ahead of the cursor, or None past the end."""
         index = self.i + offset
         return self.lines[index] if index < len(self.lines) else None
 
     def add_text(self, size: str, content: str, scroll_to: int | None = None) -> None:
+        """Append a text view, skipping empties and tagging TOC anchors."""
         if not content:
             return
         view: dict = {"type": "text", "size": size, "content": content}
@@ -77,6 +80,7 @@ class Parser:
         self.views.append(view)
 
     def add_widget(self, sub_type: str, **payload) -> None:
+        """Append a widget view of `sub_type` carrying `payload`."""
         self.views.append({"type": "widget", "sub_type": sub_type, **payload})
 
     def add_section_heading(self, text: str, *, in_toc: bool) -> None:
@@ -91,6 +95,7 @@ class Parser:
     # -- entry point ------------------------------------------------------ #
 
     def parse(self) -> tuple[list[dict], list[str], list[str]]:
+        """Scan the body once, returning its views, TOC entries and warnings."""
         while self.i < len(self.lines):
             line = self.lines[self.i]
 
@@ -133,6 +138,7 @@ class Parser:
         self.i += 1
 
     def handle_heading(self, match: re.Match) -> None:
+        """Emit a heading, or route plumbing headings to their special cases."""
         level, raw = len(match.group(1)), match.group(2)
         self.i += 1
 
@@ -178,6 +184,7 @@ class Parser:
             self.add_text(SIZE_SUBHEADING, text)
 
     def handle_paragraph(self) -> None:
+        """Collect consecutive prose lines into one body-text view."""
         chunk: list[str] = []
         while self.i < len(self.lines):
             line = self.lines[self.i]
@@ -190,6 +197,7 @@ class Parser:
                 or LIST_ITEM_RE.match(line)
                 or LIQUID_RE.match(line)
                 or HR_RE.match(line)
+                or "<iframe" in line.lower()
             ):
                 break
             chunk.append(line.strip())
@@ -200,6 +208,7 @@ class Parser:
         self.add_text(SIZE_BODY, self.text(" ".join(chunk)))
 
     def handle_fence(self, language: str) -> None:
+        """Turn a fenced code block into a clipboard widget."""
         self.i += 1
         code: list[str] = []
         while self.i < len(self.lines) and not FENCE_RE.match(self.lines[self.i]):
@@ -216,6 +225,7 @@ class Parser:
         self.add_widget(WIDGET_CLIPBOARD, content=f"{label}{body}")
 
     def handle_table(self) -> None:
+        """Collect a pipe table into a heading row plus body rows."""
         rows: list[list[str]] = []
         while self.i < len(self.lines) and TABLE_ROW_RE.match(self.lines[self.i]):
             line = self.lines[self.i]
@@ -231,6 +241,7 @@ class Parser:
         self.add_widget(WIDGET_TABLE, content={"heading": heading, "rows": body})
 
     def handle_list(self) -> None:
+        """Emit a list as a quiz, numbered list or bullet list."""
         items = self.collect_list()
         if self.skipping_section:
             return
@@ -240,10 +251,6 @@ class Parser:
         if self.next_is_quiz:
             self.next_is_quiz = False
             self.add_widget(WIDGET_QUIZ, content=self.build_quiz(items))
-            return
-
-        # A bare "1. TOC" placeholder belongs to the dropped TOC section.
-        if len(items) == 1 and items[0]["text"].strip().upper() == "TOC":
             return
 
         if items[0]["ordered"]:
@@ -257,6 +264,7 @@ class Parser:
         root: list[dict] = []
         current: list[dict] = root
         base_indent: int | None = None
+        root_ordered: bool | None = None
 
         while self.i < len(self.lines):
             line = self.lines[self.i]
@@ -275,11 +283,17 @@ class Parser:
 
             indent = len(match.group(1).expandtabs(4))
             ordered = match.group(3) is not None
-            text = self.text(match.group(4))
-            self.i += 1
 
             if base_indent is None:
                 base_indent = indent
+                root_ordered = ordered
+            elif not stack and indent <= base_indent and ordered != root_ordered:
+                # "- a" then "1. b" are two lists; handle_list picks one widget
+                # type per call, so stop and let the next call own the second.
+                break
+
+            text = self.text(match.group(4))
+            self.i += 1
 
             if indent > base_indent:
                 parent = current[-1] if current else None
@@ -296,6 +310,7 @@ class Parser:
         return root
 
     def build_item(self, item: dict) -> dict:
+        """Shape one collected list item for a numbered_list widget."""
         entry: dict = {"content": item["text"]}
         if item["children"]:
             entry["children"] = [c["text"] for c in item["children"]]
@@ -331,6 +346,7 @@ class Parser:
         self.add_widget(WIDGET_NUMBERED_LIST, items=[{"content": e} for e in entries])
 
     def handle_liquid(self, tag: str) -> None:
+        """Translate a Liquid tag into its widget, or warn if unmapped."""
         self.i += 1
 
         if tag.startswith("bibliography"):
@@ -366,6 +382,7 @@ class Parser:
             self.warnings.append(f"unhandled include: {name}")
 
     def handle_iframe(self) -> None:
+        """Turn an embedded iframe into an image widget carrying its src."""
         block: list[str] = []
         while self.i < len(self.lines):
             block.append(self.lines[self.i])
