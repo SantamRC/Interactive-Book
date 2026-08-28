@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -86,17 +87,36 @@ def main() -> int:
 
     # The output tree is generator-owned: build it beside the real one and swap,
     # so a removed or renumbered section cannot leave stale JSON behind and a
-    # failure part-way through cannot leave a half-written tree.
+    # failure part-way through cannot leave a half-written tree. The previous
+    # tree is moved aside rather than deleted, and restored if the swap fails,
+    # so a failure never leaves the output missing.
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(dir=OUTPUT_PATH.parent, prefix=".md2json-"))
+    backup = OUTPUT_PATH.with_name(f".{OUTPUT_PATH.name}.backup-{os.getpid()}")
+    moved = swapped = False
     try:
         written, warnings = generate(staging)
-        if OUTPUT_PATH.exists():
-            shutil.rmtree(OUTPUT_PATH)
-        staging.replace(OUTPUT_PATH)
+        shutil.rmtree(backup, ignore_errors=True)  # leftover from an earlier crash
+        moved = OUTPUT_PATH.exists()
+        if moved:
+            OUTPUT_PATH.replace(backup)
+        try:
+            staging.replace(OUTPUT_PATH)
+            swapped = True
+        except BaseException:
+            if moved:
+                backup.replace(OUTPUT_PATH)
+            raise
     except BaseException:
         shutil.rmtree(staging, ignore_errors=True)
         raise
+    finally:
+        # Only discard the backup once the new tree is in place. If the swap and
+        # the restore both failed it holds the only copy, so say where it is.
+        if swapped:
+            shutil.rmtree(backup, ignore_errors=True)
+        elif moved and backup.exists():
+            print(f"previous output preserved at {backup}")
 
     report(warnings)
     print(f"\n{written} files written to {OUTPUT_PATH.relative_to(REPO_ROOT)}/")
