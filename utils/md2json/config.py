@@ -8,8 +8,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-# utils/md2json/config.py -> utils/md2json -> utils -> repo root
-REPO_ROOT = Path(__file__).resolve().parents[2]
+def _find_repo_root(start: Path) -> Path:
+    """Walk up to the directory holding _config.yml, so the package can move."""
+    for candidate in (start, *start.parents):
+        if (candidate / "_config.yml").is_file():
+            return candidate
+    return start.parents[2]  # utils/md2json/config.py -> repo root
+
+
+REPO_ROOT = _find_repo_root(Path(__file__).resolve().parent)
 DOCS_PATH = REPO_ROOT / "docs"
 # The generated tree. Regenerated in full on every run.
 OUTPUT_PATH = REPO_ROOT / "TestJSON"
@@ -48,9 +55,13 @@ INCLUDE_WIDGETS = {
     "flipflop2.html": "flipflop-simulator",
 }
 
-# Structural includes that carry document shape rather than page content, so they
+# Includes handled specially rather than as a plain widget: they carry arguments
+# or document structure. Named here so no module repeats the filenames.
+IMAGE_INCLUDE = "image.html"
+CHAPTER_TOC_INCLUDE = "chapter_toc.html"
+# Structural includes carry document shape rather than page content, so they
 # survive a dropped section (see DROPPED_SECTIONS).
-STRUCTURAL_INCLUDES = {"chapter_toc.html"}
+STRUCTURAL_INCLUDES = {CHAPTER_TOC_INCLUDE}
 
 # Headings that carry Jekyll plumbing rather than content. The heading and
 # everything under it is dropped (the "1. TOC" placeholder).
@@ -60,6 +71,22 @@ DROPPED_HEADINGS = {"chapter contents"}
 
 # Code fence languages that are content rather than source code: no label line.
 UNLABELLED_FENCES = {"", "text", "txt", "yaml", "yml", "markdown", "md"}
+
+# Widget sub_types the generator names itself. Unlike INCLUDE_WIDGETS these have
+# no token in the markdown to derive from -- a table is just "| a | b |" -- so
+# they are the translator's own vocabulary. This is the frontend contract:
+# renaming one here renames it in the JSON the app consumes.
+WIDGET_TOC = "toc"
+WIDGET_TABLE = "table"
+WIDGET_BULLET_LIST = "bullet_list"
+WIDGET_NUMBERED_LIST = "numbered_list"
+WIDGET_CLIPBOARD = "clipboard"
+WIDGET_IMAGE = "image"
+WIDGET_QUIZ = "pop-quiz"
+WIDGET_CHAPTER_CONTENTS = "chapter_contents"
+
+# Heading whose body is a bibliography rather than prose.
+REFERENCES_HEADING = "references"
 
 # Text sizes. The frontend renders H1 as a section heading, H2 as a sub-heading
 # and H3 as body copy.

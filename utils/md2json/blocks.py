@@ -7,14 +7,25 @@ import re
 
 from .bibliography import CitationRegistry
 from .config import (
+    CHAPTER_TOC_INCLUDE,
     DROPPED_HEADINGS,
     DROPPED_SECTIONS,
+    IMAGE_INCLUDE,
     INCLUDE_WIDGETS,
+    REFERENCES_HEADING,
     SIZE_BODY,
     SIZE_HEADING,
     SIZE_SUBHEADING,
     STRUCTURAL_INCLUDES,
     UNLABELLED_FENCES,
+    WIDGET_BULLET_LIST,
+    WIDGET_CHAPTER_CONTENTS,
+    WIDGET_CLIPBOARD,
+    WIDGET_IMAGE,
+    WIDGET_NUMBERED_LIST,
+    WIDGET_QUIZ,
+    WIDGET_TABLE,
+    WIDGET_TOC,
 )
 from .inline import inline_text
 
@@ -105,7 +116,7 @@ class Parser:
                 self.handle_paragraph()
 
         if self.wants_toc and self.toc:
-            self.views.insert(0, {"type": "widget", "sub_type": "toc", "items": self.toc})
+            self.views.insert(0, {"type": "widget", "sub_type": WIDGET_TOC, "items": self.toc})
         return self.views, self.toc, self.warnings
 
     # -- block handlers --------------------------------------------------- #
@@ -142,7 +153,7 @@ class Parser:
                 self.add_text(SIZE_HEADING, text)
             return
 
-        if key == "references":
+        if key == REFERENCES_HEADING:
             # Emitted only once {% bibliography %} yields entries, so a page that
             # cites nothing does not get an empty References heading.
             self.pending_references = text
@@ -202,7 +213,7 @@ class Parser:
         if not body:
             return
         label = "" if language.lower() in UNLABELLED_FENCES else f"{language.title()}:\n"
-        self.add_widget("clipboard", content=f"{label}{body}")
+        self.add_widget(WIDGET_CLIPBOARD, content=f"{label}{body}")
 
     def handle_table(self) -> None:
         rows: list[list[str]] = []
@@ -217,7 +228,7 @@ class Parser:
         if self.skipping_section or not rows:
             return
         heading, *body = rows
-        self.add_widget("table", content={"heading": heading, "rows": body})
+        self.add_widget(WIDGET_TABLE, content={"heading": heading, "rows": body})
 
     def handle_list(self) -> None:
         items = self.collect_list()
@@ -228,7 +239,7 @@ class Parser:
 
         if self.next_is_quiz:
             self.next_is_quiz = False
-            self.add_widget("pop-quiz", content=self.build_quiz(items))
+            self.add_widget(WIDGET_QUIZ, content=self.build_quiz(items))
             return
 
         # A bare "1. TOC" placeholder belongs to the dropped TOC section.
@@ -236,9 +247,9 @@ class Parser:
             return
 
         if items[0]["ordered"]:
-            self.add_widget("numbered_list", items=[self.build_item(i) for i in items])
+            self.add_widget(WIDGET_NUMBERED_LIST, items=[self.build_item(i) for i in items])
         else:
-            self.add_widget("bullet_list", items=[i["text"] for i in items])
+            self.add_widget(WIDGET_BULLET_LIST, items=[i["text"] for i in items])
 
     def collect_list(self) -> list[dict]:
         """Collect one list, nesting children by indentation."""
@@ -317,7 +328,7 @@ class Parser:
         if self.pending_references is not None:
             self.add_section_heading(self.pending_references, in_toc=True)
             self.pending_references = None
-        self.add_widget("numbered_list", items=[{"content": e} for e in entries])
+        self.add_widget(WIDGET_NUMBERED_LIST, items=[{"content": e} for e in entries])
 
     def handle_liquid(self, tag: str) -> None:
         self.i += 1
@@ -342,13 +353,13 @@ class Parser:
 
         args = dict(INCLUDE_ARG_RE.findall(rest))
 
-        if name == "image.html":
+        if name == IMAGE_INCLUDE:
             content = {"link": args.get("url", "")}
             if args.get("description"):
                 content["description"] = args["description"]
-            self.add_widget("image", content=content)
-        elif name == "chapter_toc.html":
-            self.add_widget("chapter_contents", items=[])  # filled in by the caller
+            self.add_widget(WIDGET_IMAGE, content=content)
+        elif name == CHAPTER_TOC_INCLUDE:
+            self.add_widget(WIDGET_CHAPTER_CONTENTS, items=[])  # filled in by the caller
         elif name in INCLUDE_WIDGETS:
             self.add_widget(INCLUDE_WIDGETS[name])
         else:
@@ -368,4 +379,4 @@ class Parser:
         if match is None:
             self.warnings.append("iframe without a src attribute")
             return
-        self.add_widget("image", content={"link": match.group(1)})
+        self.add_widget(WIDGET_IMAGE, content={"link": match.group(1)})

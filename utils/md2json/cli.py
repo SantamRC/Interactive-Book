@@ -6,7 +6,14 @@ from pathlib import Path
 
 from .bibliography import load_bibliography
 from .book import build_navbar, build_page, chapter_contents, discover_chapters
-from .config import DOCS_PATH, OUTPUT_PATH, REPO_ROOT, ROOT_PAGES, resolve_root_page
+from .config import (
+    DOCS_PATH,
+    OUTPUT_PATH,
+    REPO_ROOT,
+    ROOT_PAGES,
+    WIDGET_CHAPTER_CONTENTS,
+    resolve_root_page,
+)
 from .output import write_document
 
 
@@ -38,7 +45,7 @@ def main() -> int:
         index = build_page(chapter.index_path, keep_title=True, bibliography=bibliography)
         warnings += [(chapter.index_path, w) for w in index.warnings]
         for view in index.views:
-            if view.get("sub_type") == "chapter_contents":
+            if view.get("sub_type") == WIDGET_CHAPTER_CONTENTS:
                 view["items"] = chapter_contents(chapter)
         write_document(
             OUTPUT_PATH / chapter.directory / "0.json",
