@@ -67,12 +67,18 @@ def discover_chapters(docs: Path) -> list[Chapter]:
 
 
 def build_navbar(chapters: list[Chapter]) -> dict:
-    """Build the navigation document listing chapters and their sections."""
+    """Build the navigation document listing chapters and their sections.
+
+    Each chapter carries the directory it was generated into, so a client can
+    build "<base>/<path>/<id>.json" for a section and "<base>/<path>/0.json" for
+    the chapter index without knowing the chapter ordering in advance.
+    """
     return {
         "chapters": [
             {
                 "id": chapter_id,
                 "name": chapter.title,
+                "path": chapter.directory,
                 "sub-chapters": [
                     {"id": number, "name": section.title}
                     for number, section in enumerate(chapter.sections, start=1)
