@@ -9,7 +9,5 @@ out
 /.idea
 
 /chapters/
-/chapters2/
-/TestJSON/
 __pycache__/
 *.py[co]

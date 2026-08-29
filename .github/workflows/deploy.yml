@@ -19,6 +19,10 @@ jobs:
       
       - name: Build
         run: bundle exec jekyll build -d out
+
+      # After the build: jekyll clears the destination directory.
+      - name: Book API Generation
+        run: python3 utils/md2json
       
       - name: Run temp server
         run: bundle exec jekyll serve --port=4000 --detach

@@ -85,6 +85,12 @@ def main() -> int:
         print(f"docs directory not found: {DOCS_PATH}")
         return 1
 
+    # The output tree is replaced wholesale, so refuse to point it at the repo
+    # itself or at anything containing the sources.
+    if OUTPUT_PATH == REPO_ROOT or OUTPUT_PATH in DOCS_PATH.parents:
+        print(f"refusing to generate into {OUTPUT_PATH}: it contains the sources")
+        return 1
+
     # The output tree is generator-owned: build it beside the real one and swap,
     # so a removed or renumbered section cannot leave stale JSON behind and a
     # failure part-way through cannot leave a half-written tree. The previous

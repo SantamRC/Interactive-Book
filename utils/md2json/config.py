@@ -18,8 +18,11 @@ def _find_repo_root(start: Path) -> Path:
 
 REPO_ROOT = _find_repo_root(Path(__file__).resolve().parent)
 DOCS_PATH = REPO_ROOT / "docs"
-# The generated tree. Regenerated in full on every run.
-OUTPUT_PATH = REPO_ROOT / "TestJSON"
+# The generated tree, written inside the Jekyll build output so the deploy
+# workflow publishes it to GitHub Pages alongside the site, the same way
+# utils/api_generator.py publishes out/_api. Served at <site>/api/.
+# Must stay a subdirectory of out/: it is replaced wholesale on every run.
+OUTPUT_PATH = REPO_ROOT / "out" / "api"
 # BibTeX sources behind {% cite %} / {% bibliography %}.
 BIBLIOGRAPHY_PATH = REPO_ROOT / "_bibliography"
 
