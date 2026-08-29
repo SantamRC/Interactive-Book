@@ -10,6 +10,7 @@ from pathlib import Path
 from .bibliography import load_bibliography
 from .book import build_navbar, build_page, chapter_contents, discover_chapters
 from .config import (
+    BIBLIOGRAPHY_PATH,
     DOCS_PATH,
     OUTPUT_PATH,
     REPO_ROOT,
@@ -85,11 +86,15 @@ def main() -> int:
         print(f"docs directory not found: {DOCS_PATH}")
         return 1
 
-    # The output tree is replaced wholesale, so refuse to point it at the repo
-    # itself or at anything containing the sources.
-    if OUTPUT_PATH == REPO_ROOT or OUTPUT_PATH in DOCS_PATH.parents:
-        print(f"refusing to generate into {OUTPUT_PATH}: it contains the sources")
-        return 1
+    # The output tree is replaced wholesale and its predecessor is then deleted,
+    # so refuse any path overlapping a source tree in either direction: equal to
+    # it, containing it, or inside it. Resolved first so a relative path or a
+    # symlink cannot slip past.
+    output = OUTPUT_PATH.resolve()
+    for source in (DOCS_PATH.resolve(), BIBLIOGRAPHY_PATH.resolve()):
+        if output == source or output in source.parents or source in output.parents:
+            print(f"refusing to generate into {output}: it overlaps sources at {source}")
+            return 1
 
     # The output tree is generator-owned: build it beside the real one and swap,
     # so a removed or renumbered section cannot leave stale JSON behind and a
